@@ -1,4 +1,6 @@
-import os, json, joblib, logging
+import os
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+import json, joblib, logging
 import numpy as np
 import tensorflow as tf
 
