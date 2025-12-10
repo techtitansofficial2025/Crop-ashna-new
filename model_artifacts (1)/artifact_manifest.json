@@ -1,0 +1,16 @@
+{
+  "dataset_sha256": "d95d8f3c8cb124192250e366fc034db6942f6a2604be32801395d477e2f79f99",
+  "created_at": "20251210T211351Z",
+  "seed": 42,
+  "impute_strategy": "median",
+  "soil_unknown_value": -1,
+  "architecture": [
+    256,
+    128,
+    64
+  ],
+  "tf_version": "2.19.0",
+  "saved_model": "./model_artifacts/saved_model",
+  "tflite": "./model_artifacts/model.tflite",
+  "calibration_temperature": 0.788617730140686
+}
