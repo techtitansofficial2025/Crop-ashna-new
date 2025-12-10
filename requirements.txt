@@ -1,0 +1,10 @@
+Django>=4.2
+djangorestframework>=3.14
+tensorflow>=2.18  # must support tflite interpreter, match Colab tf version
+numpy
+pandas
+scikit-learn
+joblib
+uvicorn
+gunicorn
+python-dotenv
