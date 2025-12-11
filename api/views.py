@@ -1,11 +1,23 @@
-import os, json, time, logging, numpy as np, pandas as pd
+import os, traceback, json, time, logging, numpy as np, pandas as pd
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.conf import settings
 from .serializers import PredictSerializer
 from .artifact_loader import load_artifacts
+from rest_framework.views import APIView
+from rest_framework.response import Response
+ART_DIR = os.environ.get("ARTIFACTS_DIR", settings.ARTIFACTS_DIR)
 
+_artifacts = None
+_ART_LOAD_ERROR = None
+
+try:
+    _artifacts = load_artifacts(ART_DIR)
+    logging.info("Artifacts loaded OK")
+except Exception:
+    _ART_LOAD_ERROR = traceback.format_exc()
+    logging.exception("Artifact loading failed (captured in _ART_LOAD_ERROR).")
 logger = logging.getLogger("api")
 
 ART_DIR = os.environ.get("ARTIFACTS_DIR", settings.ARTIFACTS_DIR)
@@ -67,6 +79,10 @@ def log_drift(in_row, prediction):
 
 class HealthView(APIView):
     def get(self, request):
+        if _ART_LOAD_ERROR:
+            # return a short slice of the traceback (first 40 lines)
+            tb_lines = _ART_LOAD_ERROR.splitlines()
+            return Response({"status":"error", "artifact_error": tb_lines[:40]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({"status":"ok"})
 
 class PredictView(APIView):
