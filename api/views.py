@@ -105,11 +105,17 @@ def log_drift(in_row, prediction, artifacts):
 # Views
 class HealthView(APIView):
     def get(self, request):
+        # force a full artifact load and return the full traceback string on error
         artifacts, tb = _ensure_artifacts()
         if tb:
-            tb_lines = tb.splitlines()
-            return Response({"status":"error", "artifact_error": tb_lines[:60]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response({"status":"ok"})
+            # TEMPORARY DEBUG: return full traceback string so we can see exact error remotely
+            return Response({"status": "error", "artifact_traceback": tb}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            # return artifact keys so we know what loaded
+            return Response({"status": "ok", "artifacts_keys": list(artifacts.keys())})
+        except Exception:
+            # fallback if artifacts is weird
+            return Response({"status": "ok", "artifacts_repr": repr(artifacts)})
 
 class PredictView(APIView):
     def post(self, request):
