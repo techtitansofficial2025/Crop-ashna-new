@@ -14,6 +14,17 @@ def ping(request):
     # lightweight ping for uptime checks
     return Response({"ping": "pong"})
 
+@api_view(["GET"])
+def debug_file_list(request):
+    artifacts_dir = os.environ.get("ARTIFACTS_DIR", "model_artifacts")
+    try:
+        files = os.listdir(artifacts_dir)
+    except Exception as e:
+        return Response({"ok": False, "error": repr(e), "artifacts_dir": artifacts_dir})
+    # limit output size
+    files = sorted(files)[:200]
+    return Response({"ok": True, "artifacts_dir": artifacts_dir, "files": files})
+
 
 logger = logging.getLogger("api")
 
