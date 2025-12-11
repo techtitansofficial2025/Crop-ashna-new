@@ -5,6 +5,12 @@ import time
 import logging
 import numpy as np
 import pandas as pd
+from rest_framework.decorators import api_view
+
+@api_view(["GET"])
+def ping(request):
+    # super-simple sanity check that avoids loading artifacts
+    return Response({"status":"pong"})
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
