@@ -18,9 +18,13 @@ ALLOWED_HOSTS = ["*"]  # tighten later if needed
 # Installed apps
 # ---------------------------------------------------------
 INSTALLED_APPS = [
-    "django.contrib.staticfiles",
-    "rest_framework",
-    "api",
+    'django.contrib.contenttypes',
+    'django.contrib.auth',
+    'django.contrib.sessions',
+    'django.contrib.staticfiles',
+
+    'rest_framework',
+    'api',
 ]
 
 MIDDLEWARE = [
@@ -71,3 +75,11 @@ if not os.path.isdir(ARTIFACTS_DIR):
 # ---------------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Minimal SQLite DB so Django contrib apps work correctly on Render.
+# SQLite is fine for a small API and avoids needing external DB credentials.
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }
+}
