@@ -1,12 +1,21 @@
-import os, traceback, json, time, logging, numpy as np, pandas as pd
+import os
+import traceback
+import json
+import time
+import logging
+import numpy as np
+import pandas as pd
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.conf import settings
 from .serializers import PredictSerializer
 from .artifact_loader import load_artifacts
-from rest_framework.views import APIView
-from rest_framework.response import Response
+
+logger = logging.getLogger("api")
+
+# ---------------- DEBUG artifact loader (temporary) ----------------
 ART_DIR = os.environ.get("ARTIFACTS_DIR", settings.ARTIFACTS_DIR)
 
 _artifacts = None
@@ -18,17 +27,14 @@ try:
 except Exception:
     _ART_LOAD_ERROR = traceback.format_exc()
     logging.exception("Artifact loading failed (captured in _ART_LOAD_ERROR).")
-logger = logging.getLogger("api")
-
-ART_DIR = os.environ.get("ARTIFACTS_DIR", settings.ARTIFACTS_DIR)
-_artifacts = load_artifacts(ART_DIR)
+# ------------------------------------------------------------------
 
 # helper names
-NUM_COLS = ["N","P","K","SOWN","SOIL_PH","TEMP","RELATIVE_HUMIDITY"]
+NUM_COLS = ["N", "P", "K", "SOWN", "SOIL_PH", "TEMP", "RELATIVE_HUMIDITY"]
 CAT_COLS = ["SOIL"]
 
 def clamp_numeric(field, val):
-    mm = _artifacts["minmax"].get(field)
+    mm = _artifacts.get("minmax", {}).get(field) if _artifacts else None
     if mm is None:
         return float(val), False
     v = float(val)
@@ -58,17 +64,19 @@ def softmax_with_temp(logits, temperature=1.0):
 def log_drift(in_row, prediction):
     # simple PSI-like logging; store record line-by-line
     try:
-        train_stats = _artifacts["train_stats"]
+        if not _artifacts:
+            return
+        train_stats = _artifacts.get("train_stats", {})
         psi = {}
         for c in NUM_COLS:
-            ts = train_stats["numeric"].get(c)
+            ts = train_stats.get("numeric", {}).get(c)
             if not ts:
-                psi[c] = {"error":"no_train_stats"}
+                psi[c] = {"error": "no_train_stats"}
                 continue
             edges = ts["hist_edges"]
             val = float(in_row[c])
             idx = np.searchsorted(edges, val, side="right") - 1
-            idx = int(max(0, min(idx, len(ts["hist_counts"])-1)))
+            idx = int(max(0, min(idx, len(ts["hist_counts"]) - 1)))
             psi[c] = {"bin_index": idx, "train_count": int(ts["hist_counts"][idx])}
         rec = {"ts": time.time(), "input": in_row, "prediction": prediction, "psi": psi}
         logpath = os.path.join(ART_DIR, "drift_log.jsonl")
@@ -79,14 +87,17 @@ def log_drift(in_row, prediction):
 
 class HealthView(APIView):
     def get(self, request):
+        # If artifact load failed at startup, return the traceback for debugging
         if _ART_LOAD_ERROR:
-            # return a short slice of the traceback (first 40 lines)
             tb_lines = _ART_LOAD_ERROR.splitlines()
-            return Response({"status":"error", "artifact_error": tb_lines[:40]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"status":"error", "artifact_error": tb_lines[:60]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({"status":"ok"})
 
 class PredictView(APIView):
     def post(self, request):
+        if _ART_LOAD_ERROR:
+            return Response({"error":"server_artifact_load_failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         serializer = PredictSerializer(data=request.data)
         if not serializer.is_valid():
             return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
@@ -110,11 +121,15 @@ class PredictView(APIView):
             return Response({"error":"preprocessing failed", "detail": str(e)}, status=500)
 
         # TFLite inference
-        interpreter = _artifacts["tflite_interpreter"]
-        idt = _artifacts["tflite_input_details"][0]
-        interpreter.set_tensor(idt['index'], X)
-        interpreter.invoke()
-        outputs = [interpreter.get_tensor(o['index']) for o in _artifacts["tflite_output_details"]]
+        try:
+            interpreter = _artifacts["tflite_interpreter"]
+            idt = _artifacts["tflite_input_details"][0]
+            interpreter.set_tensor(idt['index'], X)
+            interpreter.invoke()
+            outputs = [interpreter.get_tensor(o['index']) for o in _artifacts["tflite_output_details"]]
+        except Exception as e:
+            logger.exception("tflite inference failed")
+            return Response({"error":"inference_failed", "detail": str(e)}, status=500)
 
         # mapping: [crop_logits, harvested, water_logits, crop_duration]
         crop_logits = outputs[0][0]
